@@ -1,0 +1,13 @@
+name: credit_risk_ci
+
+conda_env: conda.yaml
+
+entry_points:
+  main:
+    parameters:
+      experiment_name: {type: str, default: "credit_risk_ci"}
+      run_name: {type: str, default: "training_run"}
+    command: |
+      python modelling.py \
+        --experiment-name {experiment_name} \
+        --run-name {run_name}
