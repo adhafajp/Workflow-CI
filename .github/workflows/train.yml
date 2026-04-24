@@ -1,0 +1,89 @@
+name: Train
+
+on:
+  workflow_call:
+    outputs:
+      run_id:
+        description: MLflow run_id hasil training
+        value: ${{ jobs.train.outputs.run_id }}
+
+env:
+  DAGSHUB_USER: adhafajp
+  DAGSHUB_REPO: credit_risk_model
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    outputs:
+      run_id: ${{ steps.get_run_id.outputs.run_id }}
+
+    steps:
+      # --------------------------
+      # 1. Run actions/checkout@v4
+      # --------------------------
+      - name: Run actions/checkout@v4
+        uses: actions/checkout@v4
+
+      # -----------------------
+      # 2. Set up Python 3.12.7
+      # -----------------------
+      - name: Set up Python 3.12.7
+        uses: ./.github/actions/setup-python
+
+      # -----------------------
+      # 3. Install dependencies
+      # -----------------------
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      # --------------------------------------------
+      # (Internal) Set MLflow Tracking URI (DagsHub)
+      # --------------------------------------------
+      - name: Set MLflow Tracking URI
+        uses: ./.github/actions/mlflow-setup
+        with:
+          dagshub_user: ${{ env.DAGSHUB_USER }}
+          dagshub_repo: ${{ env.DAGSHUB_REPO }}
+          dagshub_username: ${{ secrets.DAGSHUB_USERNAME }}
+          dagshub_token: ${{ secrets.DAGSHUB_TOKEN }}
+
+      # ---------------------
+      # 4. Run mlflow project
+      # ---------------------
+      - name: Run mlflow project
+        run: |
+          cd MLProject
+          mlflow run . \
+            --experiment-name credit_risk_ci \
+            --run-name "ci_run_$(date +'%Y%m%d_%H%M%S')" \
+            --env-manager=local
+        continue-on-error: false
+
+      # ---------------------------
+      # 5. Get latest MLflow run_id
+      # ---------------------------
+      - name: Get latest MLflow run_id
+        id: get_run_id
+        run: |
+          LATEST_RUN=$(python -W ignore scripts/get_run_id.py 2>/dev/null)
+          echo "run_id=$LATEST_RUN" >> $GITHUB_OUTPUT
+          echo "RUN_ID=$LATEST_RUN" >> $GITHUB_ENV
+          echo "Latest Run ID: $LATEST_RUN"
+
+      # -------------------------------------
+      # 6. Upload training artifacts (cache)
+      # -------------------------------------
+      - name: Upload training artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-artifacts-${{ steps.get_run_id.outputs.run_id }}
+          path: |
+            MLProject/run_info.txt
+            MLProject/confusion_matrix.png
+            MLProject/roc_curve.png
+            MLProject/feature_importance.png
+            MLProject/metrics.json
+            MLProject/classification_report.json
+          if-no-files-found: warn

@@ -1,0 +1,169 @@
+name: Docker
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        description: MLflow run_id hasil training
+        required: true
+        type: string
+      deploy_version:
+        description: Model version yang dipromote ke Production
+        required: true
+        type: string
+      drive_subfolder_id:
+        description: Google Drive subfolder ID dari artifact job
+        required: true
+        type: string
+
+env:
+  DAGSHUB_USER: adhafajp
+  DAGSHUB_REPO: credit_risk_model
+  MODEL_NAME: credit_risk_model
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # --------------------------
+      # 1. Run actions/checkout@v4
+      # --------------------------
+      - name: Run actions/checkout@v4
+        uses: actions/checkout@v4
+
+      # -----------------------
+      # 2. Set up Python 3.12.7
+      # -----------------------
+      - name: Set up Python 3.12.7
+        uses: ./.github/actions/setup-python
+
+      # -----------------------
+      # 3. Install dependencies
+      # -----------------------
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      # --------------------------------------------
+      # (Internal) Set MLflow Tracking URI (DagsHub)
+      # --------------------------------------------
+      - name: Set MLflow Tracking URI
+        uses: ./.github/actions/mlflow-setup
+        with:
+          dagshub_user: ${{ env.DAGSHUB_USER }}
+          dagshub_repo: ${{ env.DAGSHUB_REPO }}
+          dagshub_username: ${{ secrets.DAGSHUB_USERNAME }}
+          dagshub_token: ${{ secrets.DAGSHUB_TOKEN }}
+
+      # ---------------------
+      # 4. Build Docker Model
+      # ---------------------
+      - name: Build Docker Model
+        id: docker_build
+        env:
+          DEPLOY_VERSION: ${{ inputs.deploy_version }}
+        run: |
+          echo "Building Docker image..."
+          echo "Model: ${{ env.MODEL_NAME }}"
+          echo "Version: ${{ inputs.deploy_version }}"
+          echo "Run ID: ${{ inputs.run_id }}"
+
+          DOCKER_IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/credit-risk-model"
+          MODEL_URI="models:/${{ env.MODEL_NAME }}/${{ inputs.deploy_version }}"
+
+          echo "Resolved MODEL_URI: $MODEL_URI"
+
+          mlflow models build-docker \
+            -m "$MODEL_URI" \
+            -n "$DOCKER_IMAGE_NAME:latest"
+
+          echo "DOCKER_IMAGE_NAME=$DOCKER_IMAGE_NAME" >> $GITHUB_ENV
+          echo "Docker image built successfully"
+
+      # ------------------------
+      # 5. Log in to Docker Hub
+      # ------------------------
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # --------------------
+      # 6. Tag Docker Image
+      # --------------------
+      - name: Tag Docker Image
+        run: |
+          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_version }}
+          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ env.DOCKER_IMAGE_NAME }}:${{ inputs.run_id }}
+          echo "Tagged: latest, v${{ inputs.deploy_version }}, ${{ inputs.run_id }}"
+
+      # ---------------------
+      # 7. Push Docker Image
+      # ---------------------
+      - name: Push Docker Image
+        run: |
+          docker push ${{ env.DOCKER_IMAGE_NAME }}:latest
+          docker push ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_version }}
+          docker push ${{ env.DOCKER_IMAGE_NAME }}:${{ inputs.run_id }}
+          echo "All images pushed"
+
+      # ---------------------------------------------
+      # (Internal) Upload Docker Info to Google Drive
+      # ---------------------------------------------
+      - name: Upload Docker Info to Google Drive
+        env:
+          GOOGLE_OAUTH_CREDENTIALS: ${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}
+          DRIVE_SUBFOLDER_ID: ${{ inputs.drive_subfolder_id }}
+        run: |
+          echo "DOCKER HUB REPOSITORY" > MLProject/docker_hub_link.txt
+          echo "====================" >> MLProject/docker_hub_link.txt
+          echo "Repository : https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/credit-risk-model" >> MLProject/docker_hub_link.txt
+          echo "Production Model Version: ${{ inputs.deploy_version }}" >> MLProject/docker_hub_link.txt
+          echo "Latest Image   : ${{ env.DOCKER_IMAGE_NAME }}:latest" >> MLProject/docker_hub_link.txt
+          echo "Versioned Image: ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_version }}" >> MLProject/docker_hub_link.txt
+          echo "Run ID Image   : ${{ env.DOCKER_IMAGE_NAME }}:${{ inputs.run_id }}" >> MLProject/docker_hub_link.txt
+          echo "Pull command   : docker pull ${{ env.DOCKER_IMAGE_NAME }}:latest" >> MLProject/docker_hub_link.txt
+          echo "Run command    : docker run -p 5000:8080 ${{ env.DOCKER_IMAGE_NAME }}:latest" >> MLProject/docker_hub_link.txt
+
+          pip install google-auth-oauthlib google-api-python-client -q
+
+          python - <<'EOF'
+          import os, json
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          creds_info = json.loads(os.environ["GOOGLE_OAUTH_CREDENTIALS"])
+          creds = Credentials(
+              token=None,
+              refresh_token=creds_info["refresh_token"],
+              client_id=creds_info["client_id"],
+              client_secret=creds_info["client_secret"],
+              token_uri=creds_info["token_uri"]
+          )
+          creds.refresh(Request())
+
+          service      = build("drive", "v3", credentials=creds)
+          subfolder_id = os.environ["DRIVE_SUBFOLDER_ID"]
+
+          media = MediaFileUpload("MLProject/docker_hub_link.txt", resumable=True)
+          file  = service.files().create(
+              body={"name": "docker_hub_link.txt", "parents": [subfolder_id]},
+              media_body=media
+          ).execute()
+          print(f"Uploaded: docker_hub_link.txt (id: {file.get('id')})")
+          EOF
+
+      # ---------------------------
+      # (Internal) Post Job Summary
+      # ---------------------------
+      - name: Post Job Summary
+        run: |
+          echo "## MLflow CI/CD Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** ${{ inputs.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Model Version:** ${{ inputs.deploy_version }} (Stage: Production)" >> $GITHUB_STEP_SUMMARY
+          echo "**DagsHub:** https://dagshub.com/${{ env.DAGSHUB_USER }}/${{ env.DAGSHUB_REPO }}/experiments" >> $GITHUB_STEP_SUMMARY
+          echo "**Docker Hub:** https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/credit-risk-model" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,63 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "MLProject/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 0"
+
+jobs:
+  # ------------------
+  # 1. Training Module
+  # ------------------
+  train:
+    uses: ./.github/workflows/train.yml
+    secrets: inherit
+
+  # --------------------
+  # 2. Validation Module
+  # --------------------
+  validate:
+    needs: train
+    uses: ./.github/workflows/validate.yml
+    with:
+      run_id: ${{ needs.train.outputs.run_id }}
+    secrets: inherit
+
+  # -------------------
+  # 3. Promotion Module
+  # -------------------
+  promote:
+    needs: [train, validate]
+    uses: ./.github/workflows/promote.yml
+    with:
+      run_id: ${{ needs.train.outputs.run_id }}
+    secrets: inherit
+
+  # ------------------
+  # 4. Artifact Module
+  # ------------------
+  artifact:
+    needs: [train, promote]
+    uses: ./.github/workflows/artifact.yml
+    with:
+      run_id: ${{ needs.train.outputs.run_id }}
+      deploy_version: ${{ needs.promote.outputs.deploy_version }}
+      deploy_stage: ${{ needs.promote.outputs.deploy_stage }}
+    secrets: inherit
+
+  # ----------------
+  # 5. Docker Module
+  # ----------------
+  docker:
+    needs: [train, promote, artifact]
+    uses: ./.github/workflows/docker.yml
+    with:
+      run_id: ${{ needs.train.outputs.run_id }}
+      deploy_version: ${{ needs.promote.outputs.deploy_version }}
+      drive_subfolder_id: ${{ needs.artifact.outputs.drive_subfolder_id }}
+    secrets: inherit

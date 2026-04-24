@@ -1,0 +1,29 @@
+name: MLflow Setup
+description: Set MLflow Tracking URI and credentials untuk DagsHub
+
+inputs:
+  dagshub_user:
+    description: DagsHub username
+    required: true
+  dagshub_repo:
+    description: DagsHub repository name
+    required: true
+  dagshub_username:
+    description: DagsHub auth username (secret)
+    required: true
+  dagshub_token:
+    description: DagsHub auth token (secret)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # ---------------------------------
+    # Set MLflow Tracking URI (DagsHub)
+    # ---------------------------------
+    - name: Set MLflow Tracking URI
+      shell: bash
+      run: |
+        echo "MLFLOW_TRACKING_URI=https://dagshub.com/${{ inputs.dagshub_user }}/${{ inputs.dagshub_repo }}.mlflow" >> $GITHUB_ENV
+        echo "MLFLOW_TRACKING_USERNAME=${{ inputs.dagshub_username }}" >> $GITHUB_ENV
+        echo "MLFLOW_TRACKING_PASSWORD=${{ inputs.dagshub_token }}" >> $GITHUB_ENV

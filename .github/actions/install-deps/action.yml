@@ -1,0 +1,14 @@
+name: Install Dependencies
+description: Upgrade pip and install requirements.txt
+
+runs:
+  using: composite
+  steps:
+    # --------------------
+    # Install dependencies
+    # --------------------
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt

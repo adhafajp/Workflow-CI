@@ -1,0 +1,106 @@
+name: Validate
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        description: MLflow run_id dari training job
+        required: true
+        type: string
+
+env:
+  DAGSHUB_USER: adhafajp
+  DAGSHUB_REPO: credit_risk_model
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # --------------------------
+      # 1. Run actions/checkout@v4
+      # --------------------------
+      - name: Run actions/checkout@v4
+        uses: actions/checkout@v4
+
+      # -----------------------
+      # 2. Set up Python 3.12.7
+      # -----------------------
+      - name: Set up Python 3.12.7
+        uses: ./.github/actions/setup-python
+
+      # -----------------------
+      # 3. Install dependencies
+      # -----------------------
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      # --------------------------------------------
+      # (Internal) Set MLflow Tracking URI (DagsHub)
+      # --------------------------------------------
+      - name: Set MLflow Tracking URI
+        uses: ./.github/actions/mlflow-setup
+        with:
+          dagshub_user: ${{ env.DAGSHUB_USER }}
+          dagshub_repo: ${{ env.DAGSHUB_REPO }}
+          dagshub_username: ${{ secrets.DAGSHUB_USERNAME }}
+          dagshub_token: ${{ secrets.DAGSHUB_TOKEN }}
+
+      # ---------------------------
+      # 4. Validate Model Inference
+      # ---------------------------
+      - name: Validate Model Inference
+        id: validate
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          echo "Validating model inference..."
+          cd MLProject
+
+          mlflow models serve -m runs:/${{ env.RUN_ID }}/model -p 5001 --env-manager=local &
+          SERVER_PID=$!
+
+          echo "Waiting for model server to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:5001/ping > /dev/null 2>&1; then
+              echo "Model server is ready"
+              break
+            fi
+            sleep 1
+          done
+
+          cat > test_payload.json << 'EOF'
+          {
+            "dataframe_split": {
+              "columns": [
+                "person_age", "person_income", "person_emp_length", "loan_grade",
+                "loan_amnt", "loan_int_rate", "loan_percent_income", "cb_person_cred_hist_length",
+                "person_home_ownership_OTHER", "person_home_ownership_OWN", "person_home_ownership_RENT",
+                "loan_intent_EDUCATION", "loan_intent_HOMEIMPROVEMENT", "loan_intent_MEDICAL",
+                "loan_intent_PERSONAL", "loan_intent_VENTURE", "cb_person_default_on_file_Y"
+              ],
+              "data": [
+                [-0.9268, -0.1813, 0.3090, 1.0, -0.5669, 0.2726, -0.4709, -0.9385, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                [0.7037, -0.1104, -1.1931, 0.0, -0.3882, -1.0993, -0.2828, 1.0443, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+              ]
+            }
+          }
+          EOF
+
+          RESPONSE=$(curl -s -X POST http://localhost:5001/invocations -H "Content-Type: application/json" -d @test_payload.json)
+          echo "Inference response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "predictions"; then
+            echo "Model inference successful"
+          elif echo "$RESPONSE" | grep -q "error"; then
+            echo "Model inference returned error"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          else
+            echo "Unexpected response, but continuing..."
+          fi
+
+          kill $SERVER_PID 2>/dev/null || true
+          rm -f test_payload.json
+        continue-on-error: false

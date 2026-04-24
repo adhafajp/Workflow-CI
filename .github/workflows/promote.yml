@@ -1,0 +1,70 @@
+name: Promote
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        description: MLflow run_id yang akan dievaluasi
+        required: true
+        type: string
+    outputs:
+      deploy_version:
+        description: Model version yang dipromote ke Production
+        value: ${{ jobs.promote.outputs.deploy_version }}
+      deploy_stage:
+        description: Stage model setelah promosi (Production)
+        value: ${{ jobs.promote.outputs.deploy_stage }}
+
+env:
+  DAGSHUB_USER: adhafajp
+  DAGSHUB_REPO: credit_risk_model
+  MODEL_NAME: credit_risk_model
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    outputs:
+      deploy_version: ${{ steps.promote_model.outputs.deploy_version }}
+      deploy_stage: ${{ steps.promote_model.outputs.deploy_stage }}
+
+    steps:
+      # --------------------------
+      # 1. Run actions/checkout@v4
+      # --------------------------
+      - name: Run actions/checkout@v4
+        uses: actions/checkout@v4
+
+      # -----------------------
+      # 2. Set up Python 3.12.7
+      # -----------------------
+      - name: Set up Python 3.12.7
+        uses: ./.github/actions/setup-python
+
+      # -----------------------
+      # 3. Install dependencies
+      # -----------------------
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      # --------------------------------------------
+      # (Internal) Set MLflow Tracking URI (DagsHub)
+      # --------------------------------------------
+      - name: Set MLflow Tracking URI
+        uses: ./.github/actions/mlflow-setup
+        with:
+          dagshub_user: ${{ env.DAGSHUB_USER }}
+          dagshub_repo: ${{ env.DAGSHUB_REPO }}
+          dagshub_username: ${{ secrets.DAGSHUB_USERNAME }}
+          dagshub_token: ${{ secrets.DAGSHUB_TOKEN }}
+
+      # -----------------------------------------
+      # 4. Evaluate Model & Promote to Production
+      # -----------------------------------------
+      - name: Evaluate and Promote Model
+        id: promote_model
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+          MODEL_NAME: ${{ env.MODEL_NAME }}
+        run: python scripts/promote_model.py
