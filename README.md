@@ -4,13 +4,15 @@
 Repository untuk submission IDCamp 2025 Dicoding MLOps Expert - Kriteria 3
 
 ## Structure
+```text
 Workflow-CI/
-├── .github/workflows/ci.yml # CI/CD Pipeline
+├── .github/workflows/ci.yml       # CI/CD Pipeline
 └── MLProject/
-├── MLproject # MLflow project definition
-├── conda.yaml # Environment
-├── modelling.py # Training script
-└── credit_risk_preprocessing/ # Dataset
+    ├── MLproject                  # MLflow project definition
+    ├── conda.yaml                 # Environment
+    ├── modelling.py               # Training script
+    └── credit_risk_preprocessing/ # Dataset
+```
 
 ## Feature
 - Automated training on push
@@ -101,12 +103,13 @@ git push
 
 ## Author
 
-**Adhafa J.P.**  
-AI Engineer Student | MLOps Enthusiast  
+**Adhafa J.P.** 
 
-- GitHub: https://github.com/adhafajp  
-- DagsHub: https://dagshub.com/adhafajp  
-- Docker Hub: https://hub.docker.com/u/adhafajp  
+*AI Engineer Student | MLOps & ML Enthusiast*
+
+- [GitHub](https://github.com/adhafajp)  
+- [DagsHub](https://dagshub.com/adhafajp)  
+- [Docker Hub](https://hub.docker.com/u/adhafajp)
 
 ---
 
