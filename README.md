@@ -68,20 +68,27 @@ docker run -p 5000:8080 adhafajp/credit-risk-model:latest
 
 ---
 
-## **GitHub Secrets Configuration**
+## **GitHub Secrets & Variables Configuration**
 
-Buka repository GitHub → Settings → Secrets and variables → Actions → New repository secret:
+Buka repository GitHub → Settings → Secrets and variables → Actions
+
+### Secrets
+Tab **Secrets** → New repository secret — untuk data sensitif:
 
 | Secret Name | Value | Description |
 |-------------|-------|-------------|
-| `DAGSHUB_USERNAME` | `adhafajp` | DagsHub username |
 | `DAGSHUB_TOKEN` | `dp1_xxxx...` | DagsHub access token |
-| `DOCKERHUB_USERNAME` | `your_dockerhub_username` | Docker Hub username |
 | `DOCKERHUB_TOKEN` | `xxxx-xxxx-xxxx` | Docker Hub access token |
 | `GOOGLE_OAUTH_CREDENTIALS` | `{...JSON...}` | Google OAuth JSON |
 | `GOOGLE_DRIVE_FOLDER_ID` | `1abcXYZ...` | Google Drive folder ID |
 
-> **Note:** Secret versi Mega Base sama dengan versi Spaghetti, tetap digunakan karena `pipeline.yml` meneruskan semua secret ke sub-workflow secara otomatis via `secrets: inherit`.
+### Variables
+Tab **Variables** → New repository variable:
+
+| Variable Name | Value | Description |
+|---------------|-------|-------------|
+| `DAGSHUB_USERNAME` | `adhafajp` | DagsHub username |
+| `DOCKERHUB_USERNAME` | `adhafajp` | Docker Hub username |
 
 ---
 

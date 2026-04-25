@@ -57,7 +57,7 @@ jobs:
         with:
           dagshub_user: ${{ env.DAGSHUB_USER }}
           dagshub_repo: ${{ env.DAGSHUB_REPO }}
-          dagshub_username: ${{ secrets.DAGSHUB_USERNAME }}
+          dagshub_username: ${{ vars.DAGSHUB_USERNAME }}
           dagshub_token: ${{ secrets.DAGSHUB_TOKEN }}
 
       # ---------------------
@@ -74,7 +74,7 @@ jobs:
           echo "SemVer Tag: ${{ inputs.deploy_semver }}"
           echo "Run ID: ${{ inputs.run_id }}"
 
-          DOCKER_IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/credit-risk-model"
+          DOCKER_IMAGE_NAME="${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model"
           MODEL_URI="models:/${{ env.MODEL_NAME }}/${{ inputs.deploy_version }}"
 
           echo "Resolved MODEL_URI: $MODEL_URI"
@@ -92,7 +92,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # --------------------
@@ -129,7 +129,7 @@ jobs:
         run: |
           echo "DOCKER HUB REPOSITORY" > MLProject/docker_hub_link.txt
           echo "====================" >> MLProject/docker_hub_link.txt
-          echo "Repository : https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/credit-risk-model" >> MLProject/docker_hub_link.txt
+          echo "Repository : https://hub.docker.com/r/${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model" >> MLProject/docker_hub_link.txt
           echo "Production Model Version: ${{ inputs.deploy_version }}" >> MLProject/docker_hub_link.txt
           echo "Latest Image   : ${{ env.DOCKER_IMAGE_NAME }}:latest" >> MLProject/docker_hub_link.txt
           echo "Versioned Image: ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_version }}" >> MLProject/docker_hub_link.txt
@@ -156,7 +156,7 @@ jobs:
           )
           creds.refresh(Request())
 
-          service      = build("drive", "v3", credentials=creds)
+          service = build("drive", "v3", credentials=creds)
           subfolder_id = os.environ["DRIVE_SUBFOLDER_ID"]
 
           media = MediaFileUpload("MLProject/docker_hub_link.txt", resumable=True)
@@ -173,11 +173,13 @@ jobs:
       - name: Post Job Summary
         run: |
           echo "## MLflow CI/CD Complete!" >> $GITHUB_STEP_SUMMARY
-          echo "**Run ID:** ${{ inputs.run_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "**MLflow Registry:** Version ${{ inputs.deploy_version }} (Stage: Production)" >> $GITHUB_STEP_SUMMARY
-          echo "**Docker Tag:** v${{ inputs.deploy_semver }}" >> $GITHUB_STEP_SUMMARY 
-          echo "" >> $GITHUB_STEP_SUMMARY 
-          echo "### Quick Link" >> $GITHUB_STEP_SUMMARY
-
-          echo "**DagsHub:** https://dagshub.com/adhafajp/${{ env.DAGSHUB_REPO }}/experiments" >> $GITHUB_STEP_SUMMARY
-          echo "**Docker Hub:** https://hub.docker.com/r/adhafajp/credit-risk-model" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Key | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Run ID | \`${{ inputs.run_id }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| MLflow Registry | Version ${{ inputs.deploy_version }} (Stage: Production) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Tag | \`v${{ inputs.deploy_semver }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Links" >> $GITHUB_STEP_SUMMARY
+          echo "- DagsHub: https://dagshub.com/${{ vars.DAGSHUB_USERNAME }}/credit_risk_model/experiments" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker Hub: https://hub.docker.com/r/${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model" >> $GITHUB_STEP_SUMMARY

@@ -46,7 +46,7 @@ jobs:
         with:
           dagshub_user: ${{ env.DAGSHUB_USER }}
           dagshub_repo: ${{ env.DAGSHUB_REPO }}
-          dagshub_username: ${{ secrets.DAGSHUB_USERNAME }}
+          dagshub_username: ${{ vars.DAGSHUB_USERNAME }}
           dagshub_token: ${{ secrets.DAGSHUB_TOKEN }}
 
       # ---------------------

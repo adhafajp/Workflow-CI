@@ -1,5 +1,4 @@
 import os
-import sys
 import argparse
 import pandas as pd
 import numpy as np
@@ -19,10 +18,9 @@ from sklearn.metrics import (
     classification_report,
 )
 import mlflow
-import mlflow.sklearn
+import mlflow.pyfunc
 import dagshub
 import json
-import joblib
 from datetime import datetime
 
 # ==============
@@ -62,6 +60,32 @@ y_test = pd.read_csv(os.path.join(DATA_DIR, "y_test.csv")).squeeze()
 
 print(f"X_train: {X_train.shape}, X_test: {X_test.shape}")
 
+
+# =====================
+# CUSTOM PYFUNC WRAPPER
+# =====================
+class CreditRiskModelWrapper(mlflow.pyfunc.PythonModel):
+
+    def __init__(self, model):
+        self.model = model
+
+    def predict(self, context, model_input):
+        if isinstance(model_input, pd.DataFrame):
+            X = model_input
+        else:
+            X = pd.DataFrame(model_input)
+
+        predict = self.model.predict(X).tolist()
+        prob_predict = self.model.predict_proba(X)[:, 1].tolist()
+
+        return pd.DataFrame(
+            {
+                "predict": predict,
+                "prob_predict": prob_predict,
+            }
+        )
+
+
 # ===================================
 # TRAINING WITH HYPERPARAMETER TUNING
 # ===================================
@@ -70,9 +94,10 @@ with mlflow.start_run(run_name=args.run_name) as run:
     print("Starting hyperparameter tuning...")
 
     param_grid = {
-        "n_estimators": [100, 150],
-        "max_depth": [10, 20],
-        "min_samples_split": [2, 5],
+        "n_estimators": [100, 200, 300],
+        "max_depth": [10, 20, None],
+        "min_samples_split": [2, 5, 10],
+        "min_samples_leaf":  [1, 2],
     }
 
     rf = RandomForestClassifier(random_state=42, n_jobs=-1)
@@ -191,16 +216,30 @@ with mlflow.start_run(run_name=args.run_name) as run:
     # LOG MODEL
     # =========
     print("Logging model...")
-    signature = mlflow.models.infer_signature(
-        X_train.head(5), best_model.predict(X_train.head(5))
+    input_schema = mlflow.types.Schema(
+        [mlflow.types.ColSpec("double", col) for col in X_train.columns]
     )
 
-    mlflow.sklearn.log_model(
-        best_model,
-        "model",
+    output_schema = mlflow.types.Schema(
+        [
+            mlflow.types.ColSpec("long", "predict"),
+            mlflow.types.ColSpec("double", "prob_predict"),
+        ]
+    )
+
+    signature = mlflow.models.ModelSignature(
+        inputs=input_schema,
+        outputs=output_schema,
+    )
+
+    wrapped_model = CreditRiskModelWrapper(model=best_model)
+
+    mlflow.pyfunc.log_model(
+        artifact_path="model",
+        python_model=wrapped_model,
         signature=signature,
-        registered_model_name="credit_risk_model",
         input_example=X_train.head(3),
+        registered_model_name="credit_risk_model",
     )
 
     # =======

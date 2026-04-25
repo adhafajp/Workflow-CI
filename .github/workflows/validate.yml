@@ -44,7 +44,7 @@ jobs:
         with:
           dagshub_user: ${{ env.DAGSHUB_USER }}
           dagshub_repo: ${{ env.DAGSHUB_REPO }}
-          dagshub_username: ${{ secrets.DAGSHUB_USERNAME }}
+          dagshub_username: ${{ vars.DAGSHUB_USERNAME }}
           dagshub_token: ${{ secrets.DAGSHUB_TOKEN }}
 
       # ---------------------------
@@ -90,15 +90,17 @@ jobs:
 
           RESPONSE=$(curl -s -X POST http://localhost:5001/invocations -H "Content-Type: application/json" -d @test_payload.json)
           echo "Inference response: $RESPONSE"
-
-          if echo "$RESPONSE" | grep -q "predictions"; then
-            echo "Model inference successful"
+          
+          if echo "$RESPONSE" | grep -q "predict" && echo "$RESPONSE" | grep -q "prob_predict"; then
+            echo "Model inference successful — output verified"
           elif echo "$RESPONSE" | grep -q "error"; then
             echo "Model inference returned error"
             kill $SERVER_PID 2>/dev/null || true
             exit 1
           else
-            echo "Unexpected response, but continuing..."
+            echo "Unexpected response format"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
           fi
 
           kill $SERVER_PID 2>/dev/null || true
