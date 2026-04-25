@@ -161,3 +161,15 @@ git push
 
 ### About This Project
 This project is developed as part of the IDCamp 2025 Dicoding MLOps Expert submission, focusing on end-to-end machine learning pipeline automation using MLflow, GitHub Actions, and Docker
+
+---
+
+## License & Academic Integrity
+
+**Copyright (c) 2026 Adhafa Joan Putranto. All rights reserved.**
+
+Proyek ini dikembangkan sebagai bagian dari Proyek Akhir **MLOps Expert IDCamp 2025 - Dicoding**. 
+
+1. **Bukan Open Source:** Proyek ini **TIDAK** berlisensi open-source. Penggunaan, penyalinan, atau modifikasi kode tanpa izin tertulis adalah pelanggaran hak cipta
+2. **Integritas Akademik:** Jika Anda adalah sesama mahasiswa atau peserta kursus, dilarang keras melakukan *plagiarisme* (menyalin kode ini untuk dikumpulkan sebagai tugas Anda). Tindakan plagiarisme dapat menyebabkan Anda tidak lulus atau didiskualifikasi dari program terkait
+3. **Referensi:** Anda diperbolehkan melihat kode ini untuk tujuan pembelajaran, namun jika Anda terinspirasi oleh metode tertentu, harap berikan atribusi/referensi yang sesuai ke repositori ini
