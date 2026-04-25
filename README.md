@@ -24,8 +24,12 @@ Workflow-CI/
 └── MLProject/
     ├── MLproject                  # MLflow project definition
     ├── conda.yaml                 # Environment
+    ├── automate_preprocess.py     # Preprocessing script
+    ├── preprocessing_utils.py     # Shared preprocessing functions
     ├── modelling.py               # Training script
-    └── credit_risk_preprocessing/ # Dataset
+    └── credit_risk_preprocessing/ # Dataset & preprocessor artifact
+        └── raw/
+            └── credit_risk_dataset.csv
 ```
 
 ## Pipeline DAG
@@ -45,14 +49,20 @@ Setiap stage adalah reusable workflow yang bisa di debug dan di rerun secara ind
 - Modular pipeline (reusable workflows + composite actions)
 
 ## Docker Hub
-https://hub.docker.com/repository/docker/adhafajp/credit-risk-model/general
+https://hub.docker.com/r/adhafajp/credit-risk-model
 
 ## DagsHub
 https://dagshub.com/adhafajp/credit_risk_model/experiments
 
 ## Run Locally
 ```bash
+pip install -r requirements.txt
+
+# 1. Generate preprocessed data
 cd MLProject
+python automate_preprocess.py
+
+# 2. Training
 # Development
 mlflow run . --env-manager=local
 # ATAU
@@ -114,10 +124,13 @@ cd Workflow-CI
 # Create folder structure
 mkdir -p .github/workflows .github/actions/setup-python
 mkdir -p .github/actions/install-deps .github/actions/mlflow-setup
-mkdir -p scripts MLProject/credit_risk_preprocessing
+mkdir -p scripts MLProject/credit_risk_preprocessing/raw
 
 # Copy dataset
-cp -r ../Membangun_model/credit_risk_preprocessing/* MLProject/credit_risk_preprocessing/
+cp path/to/credit_risk_dataset.csv MLProject/credit_risk_preprocessing/raw/
+
+# Generate preprocessed data
+cd MLProject && python automate_preprocess.py && cd ..
 
 # Add all file
 git add .
@@ -167,6 +180,18 @@ This project is developed as part of the IDCamp 2025 Dicoding MLOps Expert submi
 ## License & Academic Integrity
 
 **Copyright (c) 2026 Adhafa Joan Putranto. All rights reserved.**
+
+> 🇬🇧 English
+
+This project was developed as part of the Final Project for **MLOps Expert IDCamp 2025 - Dicoding**.
+
+1. **Not Open Source:** This project is **NOT** licensed as open-source. Any use, copying, or modification of this code without written permission constitutes a copyright violation
+2. **Academic Integrity:** If you are a fellow student or course participant, plagiarism is strictly prohibited (submitting this code as your own work). Plagiarism may result in course failure or disqualification from the related program
+3. **Reference:** You are permitted to view this code for learning purposes. However, if you are inspired by a particular method, please provide appropriate attribution or reference back to this repository
+
+
+
+> 🇮🇩 Bahasa Indonesia
 
 Proyek ini dikembangkan sebagai bagian dari Proyek Akhir **MLOps Expert IDCamp 2025 - Dicoding**. 
 

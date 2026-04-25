@@ -17,10 +17,12 @@ from sklearn.metrics import (
     roc_auc_score,
     classification_report,
 )
+from preprocessing_utils import clip_age, clip_emplen, clip_loanpct, log1p_clip
 import mlflow
 import mlflow.pyfunc
 import dagshub
 import json
+import joblib
 from datetime import datetime
 
 # ==============
@@ -60,28 +62,35 @@ y_test = pd.read_csv(os.path.join(DATA_DIR, "y_test.csv")).squeeze()
 
 print(f"X_train: {X_train.shape}, X_test: {X_test.shape}")
 
+# ============
+# PREPROCESSOR
+# ============
+preprocessor = joblib.load(os.path.join(DATA_DIR, "preprocessor.pkl"))
 
 # =====================
 # CUSTOM PYFUNC WRAPPER
 # =====================
 class CreditRiskModelWrapper(mlflow.pyfunc.PythonModel):
-
-    def __init__(self, model):
+    def __init__(self, model, preprocessor):
         self.model = model
+        self.preprocessor = preprocessor
+    
+    def _preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
+        return self.preprocessor.transform(df)
 
     def predict(self, context, model_input):
-        if isinstance(model_input, pd.DataFrame):
-            X = model_input
-        else:
-            X = pd.DataFrame(model_input)
+        if not isinstance(model_input, pd.DataFrame):
+            model_input = pd.DataFrame(model_input)
+            
+        X = self._preprocess(model_input)
 
-        predict = self.model.predict(X).tolist()
-        prob_predict = self.model.predict_proba(X)[:, 1].tolist()
+        prediction = self.model.predict(X).tolist()
+        probability = self.model.predict_proba(X)[:, 1].tolist()
 
         return pd.DataFrame(
             {
-                "predict": predict,
-                "prob_predict": prob_predict,
+                "predict": prediction,
+                "prob_predict": probability,
             }
         )
 
@@ -216,8 +225,22 @@ with mlflow.start_run(run_name=args.run_name) as run:
     # LOG MODEL
     # =========
     print("Logging model...")
+    RAW_COLS = {
+        "person_age": "double",
+        "person_income": "double",
+        "person_emp_length": "double",
+        "loan_grade": "string",
+        "loan_amnt": "double",
+        "loan_int_rate": "double",
+        "loan_percent_income": "double",
+        "cb_person_cred_hist_length": "double",
+        "person_home_ownership": "string",
+        "loan_intent": "string",
+        "cb_person_default_on_file": "string",
+    }
+    
     input_schema = mlflow.types.Schema(
-        [mlflow.types.ColSpec("double", col) for col in X_train.columns]
+        [mlflow.types.ColSpec(dtype, col) for col, dtype in RAW_COLS.items()]
     )
 
     output_schema = mlflow.types.Schema(
@@ -231,15 +254,26 @@ with mlflow.start_run(run_name=args.run_name) as run:
         inputs=input_schema,
         outputs=output_schema,
     )
+    
+    raw_example = pd.DataFrame([
+        {
+            "person_age": 28, "person_income": 45000, "person_emp_length": 3,
+            "loan_grade": "C", "loan_amnt": 10000, "loan_int_rate": 12.5,
+            "loan_percent_income": 0.22, "cb_person_cred_hist_length": 4,
+            "person_home_ownership": "RENT", "loan_intent": "PERSONAL",
+            "cb_person_default_on_file": "N",
+        }
+    ])
 
-    wrapped_model = CreditRiskModelWrapper(model=best_model)
+    wrapped_model = CreditRiskModelWrapper(model=best_model, preprocessor=preprocessor)
 
     mlflow.pyfunc.log_model(
         artifact_path="model",
         python_model=wrapped_model,
         signature=signature,
-        input_example=X_train.head(3),
+        input_example=raw_example,
         registered_model_name="credit_risk_model",
+        artifacts={"preprocessor": os.path.join(DATA_DIR, "preprocessor.pkl")},
     )
 
     # =======
