@@ -174,6 +174,10 @@ jobs:
         run: |
           echo "## MLflow CI/CD Complete!" >> $GITHUB_STEP_SUMMARY
           echo "**Run ID:** ${{ inputs.run_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Model Version:** ${{ inputs.deploy_version }} (Stage: Production)" >> $GITHUB_STEP_SUMMARY
-          echo "**DagsHub:** https://dagshub.com/${{ env.DAGSHUB_USER }}/${{ env.DAGSHUB_REPO }}/experiments" >> $GITHUB_STEP_SUMMARY
-          echo "**Docker Hub:** https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/credit-risk-model" >> $GITHUB_STEP_SUMMARY
+          echo "**MLflow Registry:** Version ${{ inputs.deploy_version }} (Stage: Production)" >> $GITHUB_STEP_SUMMARY
+          echo "**Docker Tag:** v${{ inputs.deploy_semver }}" >> $GITHUB_STEP_SUMMARY 
+          echo "" >> $GITHUB_STEP_SUMMARY 
+          echo "### Quick Link" >> $GITHUB_STEP_SUMMARY
+
+          echo "**DagsHub:** https://dagshub.com/adhafajp/${{ env.DAGSHUB_REPO }}/experiments" >> $GITHUB_STEP_SUMMARY
+          echo "**Docker Hub:** https://hub.docker.com/r/adhafajp/credit-risk-model" >> $GITHUB_STEP_SUMMARY
