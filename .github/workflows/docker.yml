@@ -11,6 +11,10 @@ on:
         description: Model version yang dipromote ke Production
         required: true
         type: string
+      deploy_semver:
+        description: Model semantic version
+        required: true
+        type: string
       drive_subfolder_id:
         description: Google Drive subfolder ID dari artifact job
         required: true
@@ -66,7 +70,8 @@ jobs:
         run: |
           echo "Building Docker image..."
           echo "Model: ${{ env.MODEL_NAME }}"
-          echo "Version: ${{ inputs.deploy_version }}"
+          echo "MLflow Version: ${{ inputs.deploy_version }}"
+          echo "SemVer Tag: ${{ inputs.deploy_semver }}"
           echo "Run ID: ${{ inputs.run_id }}"
 
           DOCKER_IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/credit-risk-model"
@@ -95,18 +100,23 @@ jobs:
       # --------------------
       - name: Tag Docker Image
         run: |
-          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_version }}
+          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_semver }}
           docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ env.DOCKER_IMAGE_NAME }}:${{ inputs.run_id }}
-          echo "Tagged: latest, v${{ inputs.deploy_version }}, ${{ inputs.run_id }}"
+          echo "Tagged: latest, v${{ inputs.deploy_semver }}, ${{ inputs.run_id }}"
 
       # ---------------------
       # 7. Push Docker Image
       # ---------------------
       - name: Push Docker Image
         run: |
-          docker push ${{ env.DOCKER_IMAGE_NAME }}:latest
-          docker push ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_version }}
+          echo "Pushing version tag..."
+          docker push ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_semver }}
+
+          echo "Pushing run_id tag..."
           docker push ${{ env.DOCKER_IMAGE_NAME }}:${{ inputs.run_id }}
+
+          echo "Pushing latest tag..."
+          docker push ${{ env.DOCKER_IMAGE_NAME }}:latest
           echo "All images pushed"
 
       # ---------------------------------------------

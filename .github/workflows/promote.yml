@@ -9,10 +9,13 @@ on:
         type: string
     outputs:
       deploy_version:
-        description: Model version yang dipromote ke Production
+        description: Model version MLflow asli
         value: ${{ jobs.promote.outputs.deploy_version }}
+      deploy_semver:
+        description: Semantic version untuk Docker
+        value: ${{ jobs.promote.outputs.deploy_semver }}
       deploy_stage:
-        description: Stage model setelah promosi (Production)
+        description: Stage model setelah promosi
         value: ${{ jobs.promote.outputs.deploy_stage }}
 
 env:
@@ -27,6 +30,7 @@ jobs:
 
     outputs:
       deploy_version: ${{ steps.promote_model.outputs.deploy_version }}
+      deploy_semver: ${{ steps.promote_model.outputs.deploy_semver }}
       deploy_stage: ${{ steps.promote_model.outputs.deploy_stage }}
 
     steps:
@@ -67,4 +71,5 @@ jobs:
         env:
           RUN_ID: ${{ inputs.run_id }}
           MODEL_NAME: ${{ env.MODEL_NAME }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: python scripts/promote_model.py
