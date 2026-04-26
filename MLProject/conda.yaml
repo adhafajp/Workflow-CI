@@ -14,4 +14,5 @@ dependencies:
     - matplotlib==3.9.2
     - seaborn==0.13.2
     - joblib==1.5.3
+    - imbalanced-learn==0.12.3
     - gdown

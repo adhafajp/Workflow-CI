@@ -47,6 +47,10 @@ def get_bump_type(msg: str) -> str:
         return "major"
     elif msg.startswith("feat:"):
         return "minor"
+    elif msg.startswith("fix:") or msg.startswith("perf:"):
+        return "patch"
+    elif msg.startswith("chore:") or msg.startswith("ci:"):
+        return "none"
     else:
         return "patch"
 
@@ -64,8 +68,10 @@ def calculate_new_semver(current_semver: str, bump_type: str) -> str:
         return f"{major + 1}.0.0"
     elif bump_type == "minor":
         return f"{major}.{minor + 1}.0"
-    else:
+    elif bump_type == "patch":
         return f"{major}.{minor}.{patch + 1}"
+    elif bump_type == "none":
+        return current_semver
 
 
 def get_latest_production_semver(model_name: str) -> str:

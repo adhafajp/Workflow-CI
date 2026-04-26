@@ -6,4 +6,6 @@ scikit-learn==1.5.2
 seaborn==0.13.2
 matplotlib==3.9.2
 joblib==1.5.3
+psutil==7.2.2
+imbalanced-learn==0.12.3
 gdown

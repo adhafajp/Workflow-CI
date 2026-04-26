@@ -16,8 +16,11 @@ from sklearn.metrics import (
     auc,
     roc_auc_score,
     classification_report,
+    fbeta_score, 
+    make_scorer
 )
 from preprocessing_utils import clip_age, clip_emplen, clip_loanpct, log1p_clip
+from imblearn.over_sampling import SMOTE
 import mlflow
 import mlflow.pyfunc
 import dagshub
@@ -71,9 +74,10 @@ preprocessor = joblib.load(os.path.join(DATA_DIR, "preprocessor.pkl"))
 # CUSTOM PYFUNC WRAPPER
 # =====================
 class CreditRiskModelWrapper(mlflow.pyfunc.PythonModel):
-    def __init__(self, model, preprocessor):
+    def __init__(self, model, preprocessor, threshold):
         self.model = model
         self.preprocessor = preprocessor
+        self.threshold = threshold
     
     def _preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         return self.preprocessor.transform(df)
@@ -84,8 +88,8 @@ class CreditRiskModelWrapper(mlflow.pyfunc.PythonModel):
             
         X = self._preprocess(model_input)
 
-        prediction = self.model.predict(X).tolist()
         probability = self.model.predict_proba(X)[:, 1].tolist()
+        prediction = [1 if p >= self.threshold else 0 for p in probability]
 
         return pd.DataFrame(
             {
@@ -101,35 +105,68 @@ class CreditRiskModelWrapper(mlflow.pyfunc.PythonModel):
 with mlflow.start_run(run_name=args.run_name) as run:
 
     print("Starting hyperparameter tuning...")
+    
+    f2_scorer = make_scorer(fbeta_score, beta=2)
 
     param_grid = {
         "n_estimators": [100, 200, 300],
         "max_depth": [10, 20, None],
         "min_samples_split": [2, 5, 10],
-        "min_samples_leaf":  [1, 2],
+        "min_samples_leaf":  [1, 2, 4],
     }
+    
+    print(f"Before SMOTE: {y_train.value_counts().to_dict()}")
+    smote = SMOTE(random_state=42)
+    X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
+    print(f"After SMOTE: {pd.Series(y_train_balanced).value_counts().to_dict()}")
+
+    mlflow.log_params({
+        "smote_strategy": "auto",
+        "train_shape_before_smote": str(list(X_train.shape)),
+        "train_shape_after_smote": str(list(X_train_balanced.shape)),
+    })
 
     rf = RandomForestClassifier(random_state=42, n_jobs=-1)
     grid_search = GridSearchCV(
-        rf, param_grid, cv=3, scoring="roc_auc", n_jobs=-1, verbose=1
+        rf, param_grid, cv=3, scoring=f2_scorer, n_jobs=-1, verbose=1
     )
 
-    grid_search.fit(X_train, y_train)
+    grid_search.fit(X_train_balanced, y_train_balanced)
     best_model = grid_search.best_estimator_
-
     mlflow.log_params(grid_search.best_params_)
+    
+    # ==============================
+    # THRESHOLD OPTIMIZATION
+    # ==============================
+    print("Finding optimal threshold...")
+    y_proba_test = best_model.predict_proba(X_test)[:, 1]
+
+    best_threshold = 0.5
+    best_recall = 0.0
+    PRECISION_FLOOR = 0.65
+
+    for threshold in np.arange(0.1, 0.9, 0.01):
+        y_pred_t = (y_proba_test  >= threshold).astype(int)
+        rec = recall_score(y_test, y_pred_t, zero_division=0)
+        prec = precision_score(y_test, y_pred_t, zero_division=0)
+
+        if rec > best_recall and prec >= PRECISION_FLOOR:
+            best_recall = rec
+            best_threshold = threshold
+
+    print(f"Optimal threshold: {best_threshold:.2f} (recall: {best_recall:.4f})")
+    mlflow.log_param("optimal_threshold", round(best_threshold, 2))
 
     # ==========
     # EVALUATION
     # ==========
-    y_pred = best_model.predict(X_test)
-    y_proba = best_model.predict_proba(X_test)[:, 1]
+    y_pred = (y_proba_test  >= best_threshold).astype(int)
 
     acc = accuracy_score(y_test, y_pred)
     prec = precision_score(y_test, y_pred)
     rec = recall_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
-    roc_auc = roc_auc_score(y_test, y_proba)
+    roc_auc = roc_auc_score(y_test, y_proba_test)
 
     mlflow.log_metrics(
         {
@@ -166,7 +203,7 @@ with mlflow.start_run(run_name=args.run_name) as run:
     plt.close()
 
     # ROC Curve
-    fpr, tpr, _ = roc_curve(y_test, y_proba)
+    fpr, tpr, _ = roc_curve(y_test, y_proba_test)
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.plot(fpr, tpr, "darkorange", lw=2, label=f"AUC = {auc(fpr, tpr):.4f}")
     ax.plot([0, 1], [0, 1], "navy", lw=2, linestyle="--")
@@ -207,7 +244,8 @@ with mlflow.start_run(run_name=args.run_name) as run:
             "cv_score": grid_search.best_score_,
         },
         "dataset_info": {
-            "train_shape": list(X_train.shape),
+            "train_shape_original": list(X_train.shape),
+            "train_shape_balanced": list(X_train_balanced.shape),
             "test_shape": list(X_test.shape),
         },
     }
@@ -265,7 +303,7 @@ with mlflow.start_run(run_name=args.run_name) as run:
         }
     ])
 
-    wrapped_model = CreditRiskModelWrapper(model=best_model, preprocessor=preprocessor)
+    wrapped_model = CreditRiskModelWrapper(model=best_model, preprocessor=preprocessor, threshold=best_threshold,)
 
     mlflow.pyfunc.log_model(
         artifact_path="model",

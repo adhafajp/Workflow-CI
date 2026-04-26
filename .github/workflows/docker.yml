@@ -29,6 +29,8 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
 
     steps:
       # --------------------------
@@ -133,6 +135,39 @@ jobs:
           echo "Pushing latest tag..."
           docker push ${{ env.DOCKER_IMAGE_NAME }}:latest
           echo "All images pushed"
+
+      # ----------------------------
+      # (Internal) Create GitHub Release
+      # ----------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ inputs.deploy_semver }}
+          name: "Credit Risk Model v${{ inputs.deploy_semver }}"
+          body: |
+            ## Credit Risk Model v${{ inputs.deploy_semver }}
+
+            ### MLflow
+            - **Experiment**: [View on DagsHub](https://dagshub.com/${{ vars.DAGSHUB_USERNAME }}/credit_risk_model/experiments)
+            - **Run ID**: `${{ inputs.run_id }}`
+            - **Registry Version**: `${{ inputs.deploy_version }}`
+
+            ### Docker
+            ```bash
+            docker pull ${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model:v${{ inputs.deploy_semver }}
+            docker run -p 5000:8080 ${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model:v${{ inputs.deploy_semver }}
+            ```
+
+            ### Tags
+            | Tag | Image |
+            |-----|-------|
+            | Latest | `${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model:latest` |
+            | Versioned | `${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model:v${{ inputs.deploy_semver }}` |
+            | Run ID | `${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model:${{ inputs.run_id }}` |
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ---------------------------------------------
       # (Internal) Upload Docker Info to Google Drive
