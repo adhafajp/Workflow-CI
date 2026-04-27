@@ -16,8 +16,8 @@ from sklearn.metrics import (
     auc,
     roc_auc_score,
     classification_report,
-    fbeta_score, 
-    make_scorer
+    fbeta_score,
+    make_scorer,
 )
 from preprocessing_utils import clip_age, clip_emplen, clip_loanpct, log1p_clip
 from imblearn.over_sampling import SMOTE
@@ -70,6 +70,7 @@ print(f"X_train: {X_train.shape}, X_test: {X_test.shape}")
 # ============
 preprocessor = joblib.load(os.path.join(DATA_DIR, "preprocessor.pkl"))
 
+
 # =====================
 # CUSTOM PYFUNC WRAPPER
 # =====================
@@ -78,14 +79,14 @@ class CreditRiskModelWrapper(mlflow.pyfunc.PythonModel):
         self.model = model
         self.preprocessor = preprocessor
         self.threshold = threshold
-    
+
     def _preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         return self.preprocessor.transform(df)
 
     def predict(self, context, model_input):
         if not isinstance(model_input, pd.DataFrame):
             model_input = pd.DataFrame(model_input)
-            
+
         X = self._preprocess(model_input)
 
         probability = self.model.predict_proba(X)[:, 1].tolist()
@@ -105,26 +106,28 @@ class CreditRiskModelWrapper(mlflow.pyfunc.PythonModel):
 with mlflow.start_run(run_name=args.run_name) as run:
 
     print("Starting hyperparameter tuning...")
-    
+
     f2_scorer = make_scorer(fbeta_score, beta=2)
 
     param_grid = {
         "n_estimators": [100, 200, 300],
         "max_depth": [10, 20, None],
         "min_samples_split": [2, 5, 10],
-        "min_samples_leaf":  [1, 2, 4],
+        "min_samples_leaf": [1, 2, 4],
     }
-    
+
     print(f"Before SMOTE: {y_train.value_counts().to_dict()}")
-    smote = SMOTE(random_state=42)
+    smote = SMOTE(sampling_strategy=0.5, random_state=42)
     X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
     print(f"After SMOTE: {pd.Series(y_train_balanced).value_counts().to_dict()}")
 
-    mlflow.log_params({
-        "smote_strategy": "auto",
-        "train_shape_before_smote": str(list(X_train.shape)),
-        "train_shape_after_smote": str(list(X_train_balanced.shape)),
-    })
+    mlflow.log_params(
+        {
+            "smote_strategy": "auto",
+            "train_shape_before_smote": str(list(X_train.shape)),
+            "train_shape_after_smote": str(list(X_train_balanced.shape)),
+        }
+    )
 
     rf = RandomForestClassifier(random_state=42, n_jobs=-1)
     grid_search = GridSearchCV(
@@ -134,10 +137,10 @@ with mlflow.start_run(run_name=args.run_name) as run:
     grid_search.fit(X_train_balanced, y_train_balanced)
     best_model = grid_search.best_estimator_
     mlflow.log_params(grid_search.best_params_)
-    
-    # ==============================
+
+    # ======================
     # THRESHOLD OPTIMIZATION
-    # ==============================
+    # ======================
     print("Finding optimal threshold...")
     y_proba_test = best_model.predict_proba(X_test)[:, 1]
 
@@ -146,7 +149,7 @@ with mlflow.start_run(run_name=args.run_name) as run:
     PRECISION_FLOOR = 0.65
 
     for threshold in np.arange(0.1, 0.9, 0.01):
-        y_pred_t = (y_proba_test  >= threshold).astype(int)
+        y_pred_t = (y_proba_test >= threshold).astype(int)
         rec = recall_score(y_test, y_pred_t, zero_division=0)
         prec = precision_score(y_test, y_pred_t, zero_division=0)
 
@@ -160,7 +163,7 @@ with mlflow.start_run(run_name=args.run_name) as run:
     # ==========
     # EVALUATION
     # ==========
-    y_pred = (y_proba_test  >= best_threshold).astype(int)
+    y_pred = (y_proba_test >= best_threshold).astype(int)
 
     acc = accuracy_score(y_test, y_pred)
     prec = precision_score(y_test, y_pred)
@@ -276,7 +279,7 @@ with mlflow.start_run(run_name=args.run_name) as run:
         "loan_intent": "string",
         "cb_person_default_on_file": "string",
     }
-    
+
     input_schema = mlflow.types.Schema(
         [mlflow.types.ColSpec(dtype, col) for col, dtype in RAW_COLS.items()]
     )
@@ -292,18 +295,30 @@ with mlflow.start_run(run_name=args.run_name) as run:
         inputs=input_schema,
         outputs=output_schema,
     )
-    
-    raw_example = pd.DataFrame([
-        {
-            "person_age": 28, "person_income": 45000, "person_emp_length": 3,
-            "loan_grade": "C", "loan_amnt": 10000, "loan_int_rate": 12.5,
-            "loan_percent_income": 0.22, "cb_person_cred_hist_length": 4,
-            "person_home_ownership": "RENT", "loan_intent": "PERSONAL",
-            "cb_person_default_on_file": "N",
-        }
-    ])
 
-    wrapped_model = CreditRiskModelWrapper(model=best_model, preprocessor=preprocessor, threshold=best_threshold,)
+    raw_example = pd.DataFrame(
+        [
+            {
+                "person_age": 28,
+                "person_income": 45000,
+                "person_emp_length": 3,
+                "loan_grade": "C",
+                "loan_amnt": 10000,
+                "loan_int_rate": 12.5,
+                "loan_percent_income": 0.22,
+                "cb_person_cred_hist_length": 4,
+                "person_home_ownership": "RENT",
+                "loan_intent": "PERSONAL",
+                "cb_person_default_on_file": "N",
+            }
+        ]
+    )
+
+    wrapped_model = CreditRiskModelWrapper(
+        model=best_model,
+        preprocessor=preprocessor,
+        threshold=best_threshold,
+    )
 
     mlflow.pyfunc.log_model(
         artifact_path="model",

@@ -182,7 +182,7 @@ jobs:
           echo "Repository : https://hub.docker.com/r/${{ vars.DOCKERHUB_USERNAME }}/credit-risk-model" >> MLProject/docker_hub_link.txt
           echo "Production Model Version: ${{ inputs.deploy_version }}" >> MLProject/docker_hub_link.txt
           echo "Latest Image   : ${{ env.DOCKER_IMAGE_NAME }}:latest" >> MLProject/docker_hub_link.txt
-          echo "Versioned Image: ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_version }}" >> MLProject/docker_hub_link.txt
+          echo "Versioned Image: ${{ env.DOCKER_IMAGE_NAME }}:v${{ inputs.deploy_semver }}" >> MLProject/docker_hub_link.txt
           echo "Run ID Image   : ${{ env.DOCKER_IMAGE_NAME }}:${{ inputs.run_id }}" >> MLProject/docker_hub_link.txt
           echo "Pull command   : docker pull ${{ env.DOCKER_IMAGE_NAME }}:latest" >> MLProject/docker_hub_link.txt
           echo "Run command    : docker run -p 5000:8080 ${{ env.DOCKER_IMAGE_NAME }}:latest" >> MLProject/docker_hub_link.txt
