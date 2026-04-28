@@ -31,8 +31,8 @@ COPY model_artifact/ ./model/
 
 EXPOSE 8080
 
-CMD ["mlflow", "models", "serve", \
-     "-m", "/app/model", \
-     "-p", "8080", \
-     "--host", "0.0.0.0", \
-     "--env-manager=local"]
+CMD ["sh", "-c", "mlflow models serve \
+     -m /app/model \
+     -p ${PORT:-8080} \
+     --host 0.0.0.0 \
+     --env-manager=local"]
